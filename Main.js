@@ -1,4 +1,5 @@
 const express = require('express');
+const bodyParser = require('body-parser');
 const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const NodeCache = require('node-cache');
@@ -7,7 +8,6 @@ const port = 3000;
 const apiKey = '978af5af71ed005b1897ec9548c8856e';
 
 const weatherCache = new NodeCache({ stdTTL: 600 }); // Cache for 10 minutes
-
 const limiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
     max: 60 // limit each IP to 60 requests per windowMs
@@ -15,6 +15,10 @@ const limiter = rateLimit({
 
 app.use(limiter);
 app.use(express.static('public'));
+app.use(express.json()); // To parse JSON request bodies
+app.use(bodyParser.json());
+
+let favoriteCities = [];
 
 app.get('/weather/:city', async (req, res) => {
     const city = req.params.city.toLowerCase();
@@ -86,6 +90,29 @@ app.get('/forecast/:city', async (req, res) => {
     }
 });
 
+app.get('/favorites', (req, res) => {
+    res.json(favoriteCities);
+});
+
+app.post('/favorites', (req, res) => {
+    const { city } = req.body;
+    if (!city) {
+        return res.status(400).send('City not provided');
+    }
+    favoriteCities.push(city);
+    res.status(201).send('City added to favorites');
+});
+
+app.delete('/favorites/:city', (req, res) => {
+    const { city } = req.params;
+    const index = favoriteCities.indexOf(city);
+    if (index === -1) {
+        return res.status(404).send('City not found in favorites');
+    }
+    favoriteCities.splice(index, 1);
+    res.status(200).send('City removed from favorites');
+});
+
 app.listen(port, () => {
-    console.log(`Weather app listening at http://localhost:${port}`);
+    console.log(`Server running at http://localhost:${port}`);
 });
