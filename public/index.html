@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather App</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="weather-icons.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+</head>
+<body>
+    <h1>Weather App</h1>
+    <input type="text" id="city" placeholder="Enter city name">
+    <button onclick="getWeather()">Get Weather</button>
+    <button onclick="getCurrentLocationWeather()">Get Current Location Weather</button>
+    <div id="weatherResult"></div>
+    <div id="forecastResult"></div>
+
+    <script>
+        const apiKey = '978af5af71ed005b1897ec9548c8856e'; // Your OpenWeatherMap API key
+
+        async function getWeather() {
+            const city = document.getElementById('city').value;
+            if (!city) {
+                alert('Please enter a city name');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/weather/${city}`);
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+                const data = await response.json();
+                displayWeather(data);
+                getForecast(city);
+            } catch (error) {
+                console.error('Error fetching weather data:', error.message);
+                document.getElementById('weatherResult').innerHTML = 'Error fetching weather data';
+            }
+        }
+
+        async function getCurrentLocationWeather() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+
+                    try {
+                        const response = await fetch(`/weather?lat=${lat}&lon=${lon}`);
+                        if (!response.ok) {
+                            throw new Error(response.statusText);
+                        }
+                        const data = await response.json();
+                        displayWeather(data);
+                        getForecast(data.name);
+                    } catch (error) {
+                        console.error('Error fetching weather data:', error.message);
+                        document.getElementById('weatherResult').innerHTML = 'Error fetching weather data';
+                    }
+                });
+            } else {
+                alert('Geolocation is not supported by this browser.');
+            }
+        }
+
+        async function getForecast(city) {
+            try {
+                const response = await fetch(`/forecast/${city}`);
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+                const data = await response.json();
+                displayForecast(data);
+            } catch (error) {
+                console.error('Error fetching forecast data:', error.message);
+                document.getElementById('forecastResult').innerHTML = 'Error fetching forecast data';
+            }
+        }
+
+        function getWeatherIcon(weather) {
+            switch (weather.toLowerCase()) {
+                case 'clear sky':
+                    return 'wi-day-sunny';
+                case 'few clouds':
+                    return 'wi-day-cloudy';
+                case 'scattered clouds':
+                    return 'wi-cloud';
+                case 'broken clouds':
+                    return 'wi-cloudy';
+                case 'shower rain':
+                    return 'wi-showers';
+                case 'rain':
+                    return 'wi-rain';
+                case 'thunderstorm':
+                    return 'wi-thunderstorm';
+                case 'snow':
+                    return 'wi-snow';
+                case 'mist':
+                    return 'wi-fog';
+                default:
+                    return 'wi-na';
+            }
+        }
+
+        function displayWeather(data) {
+            const icon = getWeatherIcon(data.weather[0].description);
+            document.getElementById('weatherResult').innerHTML = `
+                <h2>Weather in ${data.name}</h2>
+                <i class="wi ${icon}"></i>
+                <p>Temperature: ${data.main.temp}°C</p>
+                <p>Weather: ${data.weather[0].description}</p>
+            `;
+        }
+
+        function displayForecast(data) {
+            let forecastHTML = '<h2>5-Day Forecast</h2>';
+            for (let i = 0; i < data.list.length; i += 8) {
+                const forecast = data.list[i];
+                const icon = getWeatherIcon(forecast.weather[0].description);
+                forecastHTML += `
+                    <div>
+                        <p>Date: ${forecast.dt_txt.split(' ')[0]}</p>
+                        <i class="wi ${icon}"></i>
+                        <p>Temperature: ${forecast.main.temp}°C</p>
+                        <p>Weather: ${forecast.weather[0].description}</p>
+                    </div>
+                `;
+            }
+            document.getElementById('forecastResult').innerHTML = forecastHTML;
+        }
+    </script>
+</body>
+</html>
