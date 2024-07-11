@@ -18,7 +18,21 @@ app.use(express.static('public'));
 app.use(express.json()); // To parse JSON request bodies
 app.use(bodyParser.json());
 
-let favoriteCities = [];
+const uri = 'mongodb+srv://mathushabai:aU7oiozM55KWEWl0@weather-cities.jnwwqi4.mongodb.net/?retryWrites=true&w=majority&appName=weather-cities';
+const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+let db;
+
+const connectToMongoDB = async () => {
+    try {
+        await client.connect();
+        db = client.db('weather-city');
+        console.log('Connected to MongoDB');
+    } catch (err) {
+        console.error('Error connecting to MongoDB', err);
+        process.exit(1);
+    }
+};
+
 
 app.get('/weather/:city', async (req, res) => {
     const city = req.params.city.toLowerCase();
@@ -90,29 +104,78 @@ app.get('/forecast/:city', async (req, res) => {
     }
 });
 
-app.get('/favorites', (req, res) => {
-    res.json(favoriteCities);
+app.get('/favorites', async (req, res) => {
+    try {
+        const collection = db.collection('favorite-city');
+        const favorites = await collection.find().toArray();
+        res.json(favorites);
+    } catch (error) {
+        console.error('Error fetching favorites:', error.message);
+        res.status(500).send('Error fetching favorites');
+    }
 });
 
-app.post('/favorites', (req, res) => {
+app.post('/favorites', async (req, res) => {
     const { city } = req.body;
     if (!city) {
         return res.status(400).send('City not provided');
     }
-    favoriteCities.push(city);
-    res.status(201).send('City added to favorites');
-});
 
-app.delete('/favorites/:city', (req, res) => {
-    const { city } = req.params;
-    const index = favoriteCities.indexOf(city);
-    if (index === -1) {
-        return res.status(404).send('City not found in favorites');
+    const normalizedCity = city.toLowerCase();
+
+    try {
+        // Fetch latitude and longitude of the city
+        const response = await axios.get(`http://api.openweathermap.org/data/2.5/weather?q=${normalizedCity}&appid=${apiKey}`);
+        const { coord } = response.data;
+        const latitude = coord.lat;
+        const longitude = coord.lon;
+
+        console.log('Request body:', req.body); // Log the request body
+
+        const collection = db.collection('favorite-city');
+        const existingCity = await collection.findOne({ city: normalizedCity });
+
+        if (existingCity) {
+            return res.status(409).send('City already in favorites');
+        }
+
+        await collection.insertOne({ city: normalizedCity, latitude, longitude });
+        res.status(201).send('City added to favorites');
+    } catch (error) {
+        console.error('Error adding city to favorites:', error.message);
+
+        if (error.response) {
+            // Log details of the error response
+            console.error('Error response data:', error.response.data);
+            console.error('Error response status:', error.response.status);
+            console.error('Error response headers:', error.response.headers);
+        }
+
+        res.status(500).send('Error adding city to favorites');
     }
-    favoriteCities.splice(index, 1);
-    res.status(200).send('City removed from favorites');
 });
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+app.delete('/favorites/:city', async (req, res) => {
+    const { city } = req.params;
+    const normalizedCity = city.toLowerCase();
+
+    try {
+        const collection = db.collection('favorite-city');
+        const result = await collection.deleteOne({ city: normalizedCity });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).send('City not found in favorites');
+        }
+
+        res.status(200).send('City removed from favorites');
+    } catch (error) {
+        console.error('Error removing city from favorites:', error.message);
+        res.status(500).send('Error removing city from favorites');
+    }
+});
+
+connectToMongoDB().then(() => {
+    app.listen(port, () => {
+        console.log(`Server running at http://localhost:${port}`);
+    });
 });
